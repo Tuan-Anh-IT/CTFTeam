@@ -25,28 +25,31 @@ CTFTeamSite/
 
 ---
 
-## 🚀 Chạy Cục Bộ (Windows PowerShell)
+## 🚀 Chạy Cục Bộ (Windows)
 
-### 1️⃣ Setup Environment
+### 1️⃣ Cài Đặt PHP & Web Server
 
-```powershell
-# Tạo virtual environment
-python -m venv .venv
-
-# Kích hoạt (Windows PowerShell)
-.\.venv\Scripts\Activate.ps1
-
-# Cài đặt dependencies
-pip install -r requirements.txt
+**Option A: XAMPP** (Easy)
+```
+1. Download XAMPP: https://www.apachefriends.org/
+2. Cài đặt (chọn Apache + PHP)
+3. Copy project vào C:\xampp\htdocs\ctf-website\
+4. Start Apache từ XAMPP Control Panel
+5. Mở http://localhost/ctf-website/
 ```
 
-### 2️⃣ Chạy App
-
+**Option B: Built-in PHP Server** (Quick)
 ```powershell
-python app.py
+cd d:\VSCode\src\CTFTeamSite
+php -S 127.0.0.1:8000
 ```
+Mở http://127.0.0.1:8000 trong browser 🌐
 
-Mở http://127.0.0.1:5000 trong browser 🌐
+### 2️⃣ Yêu Cầu
+
+- **PHP 7.4+**
+- **Apache** (với mod_rewrite) hoặc **PHP Built-in Server**
+- **.htaccess** support (nếu dùng Apache)
 
 ---
 
@@ -111,131 +114,129 @@ UNIVERSITY = {
 
 ---
 
-## 🌍 Deploy Lên Host (VPS/Web Hosting)
+## 🌍 Deploy Lên Host (VPS/Web Hosting PHP)
 
-### 📤 Option 1: Setup Nhanh (SSH + Git)
+### 📤 Option 1: Upload via FTP (Hosting chia sẻ)
+
+#### Lần Đầu Setup
+
+```
+1. Download FileZilla hoặc WinSCP
+2. FTP vào host (host cung cấp credentials)
+3. Upload toàn bộ files:
+   - index.php
+   - .htaccess
+   - templates/ (tất cả .php files)
+   - static/ (css + js + img)
+4. Set permissions: chmod 755 trên folders, 644 trên files
+5. Visit http://your-domain.com
+```
+
+#### Update Code
+
+```
+1. Sửa file locally
+2. Upload lại via FTP
+   - Chỉ upload file changed, hoặc
+   - Upload entire project nếu muốn an toàn
+
+3. Refresh browser (Ctrl+Shift+R để clear cache)
+```
+
+---
+
+### 🔧 Option 2: SSH + Git (VPS riêng)
 
 #### Lần Đầu Setup
 
 ```bash
-# SSH vào host
-ssh user@your-host.com
+# SSH vào VPS
+ssh user@your-vps.com
 
 # Clone repository
-cd /home/user/apps
+cd /home/user/public_html  # hoặc /var/www/html
 git clone <repo-url> ctf-website
 cd ctf-website
 
-# Setup virtual environment
-python3 -m venv venv
-source venv/bin/activate
+# Verify PHP enabled (should see version)
+php -v
 
-# Cài dependencies
-pip install -r requirements.txt
-pip install gunicorn
-
-# Test chạy
-python app.py
+# Set permissions
+chmod 755 .
+chmod 644 index.php .htaccess templates/*.php
+chmod 755 static static/css static/js static/img
 ```
 
-#### Update Code Trên Host
-
-**Quick Method:**
+#### Update Code
 
 ```bash
 # Trên local machine
 git add .
-git commit -m "Update: [describe]"
+git commit -m "Fix: [description]"
 git push origin main
 
-# Trên host
-cd /home/user/apps/ctf-website
+# Trên VPS
+cd /home/user/public_html/ctf-website
 git pull origin main
-sudo systemctl restart ctf-website
+# Done! No restart needed (PHP is stateless)
+```
+
+#### Auto-Update (Webhook)
+
+```bash
+# Cài webhook listener (optional, tùy hosting)
+# Hoặc dùng cron job:
+*/10 * * * * cd /home/user/public_html/ctf-website && git pull origin main > /dev/null 2>&1
 ```
 
 ---
 
-### 🔧 Option 2: Setup Systemd (Production)
+### 🌐 Option 3: Apache Configuration
 
-#### Create Service File
+#### Verify mod_rewrite
 
 ```bash
-sudo nano /etc/systemd/system/ctf-website.service
+# SSH vào VPS
+sudo a2enmod rewrite
+sudo systemctl restart apache2
+```
+
+#### .htaccess Setup
+
+File `.htaccess` đã có sẵn - nó sẽ:
+- Route `/team` → `?page=team`
+- Route `/writeups` → `?page=writeups`
+- Route `/api/team.json` → `?page=api-team`
+
+#### Virtual Host (Optional)
+
+```bash
+sudo nano /etc/apache2/sites-available/ctf-website.conf
 ```
 
 Copy & paste:
-```ini
-[Unit]
-Description=6h4T9pTpR0 CTF Team Website
-After=network.target
+```apache
+<VirtualHost *:80>
+    ServerName your-domain.com
+    ServerAlias www.your-domain.com
+    DocumentRoot /home/user/public_html/ctf-website
 
-[Service]
-User=www-data
-WorkingDirectory=/home/user/apps/ctf-website
-ExecStart=/home/user/apps/ctf-website/venv/bin/gunicorn -w 4 -b 0.0.0.0:5000 app:app
-Restart=always
-RestartSec=10
+    <Directory /home/user/public_html/ctf-website>
+        AllowOverride All
+        Require all granted
+    </Directory>
 
-[Install]
-WantedBy=multi-user.target
+    <FilesMatch \.php$>
+        SetHandler "proxy:unix:/var/run/php-fpm.sock|fcgi://localhost"
+    </FilesMatch>
+</VirtualHost>
 ```
 
-#### Enable Service
-
+Enable & test:
 ```bash
-sudo systemctl daemon-reload
-sudo systemctl enable ctf-website
-sudo systemctl start ctf-website
-sudo systemctl status ctf-website
-```
-
-#### Auto-Restart After Code Update
-
-```bash
-cd /home/user/apps/ctf-website
-git pull origin main
-sudo systemctl restart ctf-website
-```
-
----
-
-### 🌐 Option 3: Nginx Reverse Proxy
-
-#### Config Nginx
-
-```bash
-sudo nano /etc/nginx/sites-available/ctf-website
-```
-
-Copy & paste:
-```nginx
-server {
-    listen 80;
-    server_name your-domain.com www.your-domain.com;
-
-    location / {
-        proxy_pass http://127.0.0.1:5000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-
-    location /static/ {
-        alias /home/user/apps/ctf-website/static/;
-        expires 30d;
-        add_header Cache-Control "public, immutable";
-    }
-}
-```
-
-#### Enable & Test
-
-```bash
-sudo ln -s /etc/nginx/sites-available/ctf-website /etc/nginx/sites-enabled/
-sudo nginx -t
-sudo systemctl restart nginx
+sudo a2ensite ctf-website
+sudo apache2ctl configtest
+sudo systemctl restart apache2
 ```
 
 ---
@@ -254,33 +255,33 @@ Certbot sẽ tự động config SSL! ✅
 
 ## ⚡ Update Code Workflow
 
-### Fastest Way
+### PHP Advantage: No Restart Needed! 🚀
 
-**Lần đầu - Local setup:**
+Khác với Python/Flask, PHP không cần restart - cứ push code lên là hoạt động ngay!
+
+**Mỗi lần sửa code:**
+
 ```powershell
-git init
-git add .
-git commit -m "Initial commit"
-git push origin main
+# Local machine
+1. Sửa file (.php, CSS, JS)
+2. Test locally: php -S 127.0.0.1:8000
+3. Push lên git:
+   git add .
+   git commit -m "Fix: [description]"
+   git push origin main
 ```
 
-**Mỗi lần sửa code - Local:**
-```powershell
-# 1. Sửa file
-# 2. Test: python app.py
-# 3. Push:
-git add .
-git commit -m "Fix: [chi tiết sửa]"
-git push origin main
-```
+**Trên host:**
 
-**Auto-update on host - Run this once:**
 ```bash
-# Setup auto-pull cron job
-(crontab -l 2>/dev/null; echo "*/5 * * * * cd /home/user/apps/ctf-website && git pull origin main && sudo systemctl restart ctf-website") | crontab -
+# SSH vào VPS
+cd /home/user/public_html/ctf-website
+git pull origin main
+# DONE! Không cần restart Apache
 ```
 
-Now code updates automatically every 5 minutes! 🚀
+Hoặc chỉ dùng **FTP upload** nếu không có Git:
+- Sửa file → Upload via FileZilla → Refresh browser ✅
 
 ---
 
